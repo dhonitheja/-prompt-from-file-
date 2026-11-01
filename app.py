@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()  # "ollama" or "openai"
+PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower()  # "auto", "ollama" or "openai"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2-vision")  # any vision model: qwen2.5vl, llava, gemma3...
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # any vision-capable OpenAI model
@@ -139,7 +139,7 @@ def run_openai(instruction: str, images: list[tuple[bytes, str]], text: str | No
 
 
 @app.post("/api/prompt")
-async def make_prompt(file: UploadFile = File(...), note: str = Form("")):
+async def make_prompt(file: UploadFile = File(...), note: str = Form(""), provider: str = Form("")):
     data = await file.read()
     if len(data) > MAX_BYTES:
         raise HTTPException(413, f"File too large (max {MAX_BYTES // 1024 // 1024} MB).")
@@ -149,17 +149,21 @@ async def make_prompt(file: UploadFile = File(...), note: str = Form("")):
     instruction, images, text = prepare(file.filename or "upload", mime, data)
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
-    used = PROVIDER
-    if PROVIDER == "openai":
-        result = run_openai(instruction, images, text)
-    else:
+    choice = (provider or PROVIDER).lower()
+    if choice not in {"auto", "ollama", "openai"}:
+        raise HTTPException(400, "provider must be auto, ollama or openai.")
+    if choice == "openai":
+        used, result = "openai", run_openai(instruction, images, text)
+    elif choice == "ollama":
+        used, result = "ollama", run_ollama(instruction, images, text)
+    else:  # auto: local first, ChatGPT if it fails and a key is set
         used = "ollama"
         try:
             result = run_ollama(instruction, images, text)
         except HTTPException:
             if not os.getenv("OPENAI_API_KEY"):
                 raise
-            used = "openai"  # local model failed: fall back to ChatGPT
+            used = "openai"
             result = run_openai(instruction, images, text)
     return {"filename": file.filename, "type": mime, "provider": used, "prompt": result}
 

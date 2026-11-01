@@ -49,7 +49,9 @@ export OPENAI_API_KEY=sk-...
 uvicorn app:app --reload
 ```
 
-The response's `provider` field tells you which model answered. To skip the local model and use only ChatGPT, set `LLM_PROVIDER=openai`.
+The response's `provider` field tells you which model answered.
+
+You can also pick the model on the page (Auto, Local only, or ChatGPT only), or per request with the `provider` field (`auto`, `ollama`, `openai`). To change the default for every request, set `LLM_PROVIDER`.
 
 Note: when the fallback runs, the file is sent to OpenAI rather than staying on your machine. Leave `OPENAI_API_KEY` unset to keep everything local.
 
@@ -59,7 +61,7 @@ All settings are environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | `ollama` (with ChatGPT fallback) or `openai` (ChatGPT only) |
+| `LLM_PROVIDER` | `auto` | `auto` (local, then ChatGPT), `ollama` (local only) or `openai` (ChatGPT only) |
 | `OLLAMA_MODEL` | `llama3.2-vision` | Any Ollama vision model |
 | `OLLAMA_URL` | `http://localhost:11434` | Where Ollama is running |
 | `OPENAI_API_KEY` | none | Enables the ChatGPT fallback |
@@ -77,6 +79,7 @@ curl -F "file=@photo.jpg" -F "note=for Midjourney" http://localhost:8000/api/pro
 
 - `file` (required): the upload
 - `note` (optional): extra context for the model
+- `provider` (optional): `auto`, `ollama` or `openai`; defaults to `LLM_PROVIDER`
 
 Response:
 
