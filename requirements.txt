@@ -3,5 +3,3 @@ uvicorn[standard]
 python-multipart
 httpx
 pypdf
-# only needed if LLM_PROVIDER=claude
-anthropic

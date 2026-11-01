@@ -2,7 +2,7 @@
 
 Upload an image, video, PDF or text file and get back the prompt that could recreate it, ready to paste into an AI image, video or text tool.
 
-It runs on a **local model through [Ollama](https://ollama.com)** by default, so your files never leave your machine. You can switch to the Claude API with one environment variable.
+It runs on a **local model through [Ollama](https://ollama.com)** by default, so your files never leave your machine. If the local model fails, it can fall back to **ChatGPT (OpenAI)**.
 
 ## What you get
 
@@ -40,14 +40,18 @@ uvicorn app:app --reload
 
 Open http://localhost:8000, drop a file on the page, and click **Generate prompt**. Add optional context in the text box, such as "for Midjourney".
 
-## Using Claude instead
+## ChatGPT fallback
+
+Set an OpenAI key and the app falls back to ChatGPT whenever Ollama is unreachable or returns an error:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-LLM_PROVIDER=claude uvicorn app:app --reload
+export OPENAI_API_KEY=sk-...
+uvicorn app:app --reload
 ```
 
-Files are then sent to the Claude API rather than staying on your machine.
+The response's `provider` field tells you which model answered. To skip the local model and use only ChatGPT, set `LLM_PROVIDER=openai`.
+
+Note: when the fallback runs, the file is sent to OpenAI rather than staying on your machine. Leave `OPENAI_API_KEY` unset to keep everything local.
 
 ## Configuration
 
@@ -55,11 +59,11 @@ All settings are environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | `ollama` or `claude` |
+| `LLM_PROVIDER` | `ollama` | `ollama` (with ChatGPT fallback) or `openai` (ChatGPT only) |
 | `OLLAMA_MODEL` | `llama3.2-vision` | Any Ollama vision model |
 | `OLLAMA_URL` | `http://localhost:11434` | Where Ollama is running |
-| `CLAUDE_MODEL` | `claude-sonnet-5-5` | Model used when `LLM_PROVIDER=claude` |
-| `ANTHROPIC_API_KEY` | none | Required for Claude |
+| `OPENAI_API_KEY` | none | Enables the ChatGPT fallback |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Any vision-capable OpenAI model |
 | `VIDEO_FRAMES` | `6` | Frames sampled per video |
 | `MAX_UPLOAD_MB` | `50` | Upload size limit |
 
@@ -97,7 +101,7 @@ requirements.txt   Python dependencies
 
 ## Tips and limits
 
-- Prompt quality depends on the model. Small models like `llava` give rougher results than `qwen2.5vl` or Claude.
+- Prompt quality depends on the model. Small models like `llava` give rougher results than `qwen2.5vl` or ChatGPT.
 - A local model sees only the sampled video frames, so motion and camera work are inferred from them. Raise `VIDEO_FRAMES` for longer videos, at the cost of speed.
 - The first request can be slow while Ollama loads the model.
 - The result is an educated reconstruction, not the original prompt. The app describes what is visible and does not recover hidden metadata.

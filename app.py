@@ -1,6 +1,7 @@
 """Upload a file (image, video, PDF, text) and get back a reverse-engineered prompt.
 
-Runs on a local model via Ollama by default. Set LLM_PROVIDER=claude to use the Claude API.
+Runs on a local model via Ollama by default. If Ollama fails and OPENAI_API_KEY is set,
+it falls back to ChatGPT (OpenAI). Set LLM_PROVIDER=openai to use OpenAI only.
 """
 import base64
 import io
@@ -15,10 +16,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()  # "ollama" or "claude"
+PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()  # "ollama" or "openai"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2-vision")  # any vision model: qwen2.5vl, llava, gemma3...
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # any vision-capable OpenAI model
+OPENAI_URL = os.getenv("OPENAI_URL", "https://api.openai.com/v1/chat/completions")
 MAX_BYTES = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 VIDEO_FRAMES = int(os.getenv("VIDEO_FRAMES", "6"))
 
@@ -112,23 +114,28 @@ def run_ollama(instruction: str, images: list[tuple[bytes, str]], text: str | No
     return r.json()["message"]["content"]
 
 
-def run_claude(instruction: str, images: list[tuple[bytes, str]], text: str | None) -> str:
-    import anthropic
-    blocks = []
+def run_openai(instruction: str, images: list[tuple[bytes, str]], text: str | None) -> str:
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise HTTPException(502, "OPENAI_API_KEY is not set.")
+    parts = [{"type": "text", "text": instruction + (f"\n\nFile content:\n{text}" if text else "")}]
     for b, m in images:
-        blocks.append({"type": "image", "source": {"type": "base64", "media_type": m,
-                                                     "data": base64.b64encode(b).decode()}})
-    if text:
-        blocks.append({"type": "text", "text": f"File content:\n{text}"})
-    blocks.append({"type": "text", "text": instruction})
+        parts.append({"type": "image_url",
+                      "image_url": {"url": f"data:{m};base64,{base64.b64encode(b).decode()}"}})
     try:
-        resp = anthropic.Anthropic().messages.create(
-            model=CLAUDE_MODEL, max_tokens=1500, system=SYSTEM,
-            messages=[{"role": "user", "content": blocks}],
+        r = httpx.post(
+            OPENAI_URL,
+            headers={"Authorization": f"Bearer {key}"},
+            json={"model": OPENAI_MODEL, "max_tokens": 1500,
+                  "messages": [{"role": "system", "content": SYSTEM},
+                               {"role": "user", "content": parts}]},
+            timeout=120,
         )
-    except anthropic.APIError as e:
-        raise HTTPException(502, f"Claude API error: {e}")
-    return "".join(b.text for b in resp.content if b.type == "text")
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Can't reach OpenAI: {e}")
+    if r.status_code != 200:
+        raise HTTPException(502, f"OpenAI error: {r.text[:300]}")
+    return r.json()["choices"][0]["message"]["content"]
 
 
 @app.post("/api/prompt")
@@ -142,9 +149,19 @@ async def make_prompt(file: UploadFile = File(...), note: str = Form("")):
     instruction, images, text = prepare(file.filename or "upload", mime, data)
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
-    run = run_claude if PROVIDER == "claude" else run_ollama
-    return {"filename": file.filename, "type": mime, "provider": PROVIDER,
-            "prompt": run(instruction, images, text)}
+    used = PROVIDER
+    if PROVIDER == "openai":
+        result = run_openai(instruction, images, text)
+    else:
+        used = "ollama"
+        try:
+            result = run_ollama(instruction, images, text)
+        except HTTPException:
+            if not os.getenv("OPENAI_API_KEY"):
+                raise
+            used = "openai"  # local model failed: fall back to ChatGPT
+            result = run_openai(instruction, images, text)
+    return {"filename": file.filename, "type": mime, "provider": used, "prompt": result}
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
