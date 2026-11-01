@@ -18,12 +18,18 @@ People who see an image or video they like want to recreate or vary it with an A
 | US-5 | I choose which model answers, or let it fall back. | Page and API accept Auto, Local, ChatGPT, Claude. Auto tries local, then ChatGPT, then Claude, skipping any without a key. The answering model is shown. |
 | US-6 | I add context such as "for Midjourney". | The optional note is passed to the model. |
 | US-7 | I get clear errors. | Unsupported type, empty file, oversized file, unreachable or misbehaving model each return a specific message, never a crash. |
+| US-8 | I paste a link to a website, app or game and get a prompt to recreate it. | The page's title, description, text and preview image are read. The response says that videos, apps and games are not opened or played. Pages with no readable content return a clear message. |
+| US-9 | I paste a direct link to an image, video, audio, PDF or text file. | It is downloaded (within the size limit) and handled like an upload. |
+| US-10 | I upload audio and get a prompt from what is said. | Speech is transcribed locally when possible. Audio is only sent to a cloud service when I choose ChatGPT or opt in. A file with no speech returns a clear message. |
+| US-11 | Pasting a link cannot be used to reach my private network. | Localhost, private, link-local and metadata addresses are refused, including via redirects. |
 
 ## Scope
-In: single-file upload, web page, JSON API, three model backends.
+In: single-file upload or single link, web page, JSON API, three model backends, speech transcription.
 
 ## Non-goals
-- Audio files (planned, not in this version).
+- Analyzing music, tone of voice or sound effects (speech only), and the audio track of videos.
+- Playing videos, running apps or games, logging in to sites, or reading pages that need JavaScript to show anything.
+- Game and app binaries (executables, ROMs, installers). Use screenshots, gameplay video or the store link.
 - Accounts, history, or storing uploads.
 - Recovering the real original prompt or hidden metadata. Output is a reconstruction.
 - Multi-user hosting. There is no authentication (see `SECURITY.md`).
@@ -32,3 +38,5 @@ In: single-file upload, web page, JSON API, three model backends.
 1. Local vision models can give weak prompts. Mitigation: configurable model, cloud fallback.
 2. Files sent to cloud models leave the machine. Mitigation: local default, explicit keys, documented.
 3. Large or hostile uploads exhaust memory or CPU. Mitigation: size cap, timeouts (see threat model).
+4. Link fetching lets someone make the server call internal services (SSRF). Mitigation: address checks on every hop, pinned connection, port and scheme limits.
+5. Link results look authoritative but are based only on page metadata. Mitigation: a `notes` field states exactly what was and was not analyzed.

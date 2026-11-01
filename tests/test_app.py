@@ -1,55 +1,10 @@
-"""Tests for the upload -> prompt API. All model backends are mocked."""
+"""Tests for file uploads and provider selection."""
 import io
-import sys
-from pathlib import Path
 
-import httpx
-import pytest
-from fastapi.testclient import TestClient
+import app as appmod
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import app as appmod  # noqa: E402
-
-PNG = (b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 TXT = ("a.txt", b"hello", "text/plain")
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
-    for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
-        monkeypatch.delenv(k, raising=False)
-    monkeypatch.setattr(appmod, "PROVIDER", "auto")
-
-
-@pytest.fixture
-def client():
-    return TestClient(appmod.app)
-
-
-@pytest.fixture
-def backends(monkeypatch):
-    """Mock all three backends. Set .ollama_up = False to simulate Ollama down."""
-    calls = []
-
-    class State:
-        ollama_up = True
-        ollama_body = {"message": {"content": "LOCAL"}}
-
-    def fake_post(url, **kw):
-        calls.append((url, kw))
-        if "11434" in url:
-            if not State.ollama_up:
-                raise httpx.ConnectError("down")
-            return httpx.Response(200, json=State.ollama_body)
-        if "openai" in url:
-            return httpx.Response(200, json={"choices": [{"message": {"content": "GPT"}}]})
-        if "anthropic" in url:
-            return httpx.Response(200, json={"content": [{"type": "text", "text": "CLAUDE"}]})
-        raise AssertionError(url)
-
-    monkeypatch.setattr(appmod.httpx, "post", fake_post)
-    State.calls = calls
-    return State
 
 
 def post(client, file=TXT, **data):
@@ -65,6 +20,7 @@ def test_local_default(client, backends):
     assert r.status_code == 200
     assert r.json()["provider"] == "ollama"
     assert r.json()["prompt"] == "LOCAL"
+    assert r.json()["source"] == "a.txt"
 
 
 def test_image_is_sent_to_vision_model(client, backends):
@@ -88,6 +44,15 @@ def test_too_large_413(client, backends, monkeypatch):
 
 def test_bad_provider_400(client, backends):
     assert post(client, provider="bogus").status_code == 400
+
+
+def test_neither_file_nor_link_400(client, backends):
+    assert client.post("/api/prompt", data={}).status_code == 400
+
+
+def test_both_file_and_link_400(client, backends):
+    r = client.post("/api/prompt", files={"file": TXT}, data={"url": "https://game.test/"})
+    assert r.status_code == 400
 
 
 def test_ollama_down_no_keys_returns_502(client, backends):
@@ -129,8 +94,7 @@ def test_explicit_ollama_does_not_fall_back(client, backends, monkeypatch):
 
 def test_malformed_model_response_is_502_not_500(client, backends):
     backends.ollama_body = {"unexpected": True}
-    r = post(client)
-    assert r.status_code == 502
+    assert post(client).status_code == 502
 
 
 def test_note_is_forwarded(client, backends):
@@ -144,5 +108,53 @@ def test_pdf_text_extracted(client, backends):
     w = PdfWriter()
     w.add_blank_page(width=72, height=72)
     w.write(buf)
-    r = post(client, ("a.pdf", buf.getvalue(), "application/pdf"))
+    assert post(client, ("a.pdf", buf.getvalue(), "application/pdf")).status_code == 200
+
+
+# --- audio ---
+
+MP3 = ("talk.mp3", b"fake-audio", "audio/mpeg")
+
+
+class _Seg:
+    def __init__(self, text):
+        self.text = text
+
+
+class _FakeWhisper:
+    def __init__(self, words):
+        self.words = words
+
+    def transcribe(self, path):
+        return [_Seg(w) for w in self.words], None
+
+
+def test_audio_transcribed_locally(client, backends, monkeypatch):
+    monkeypatch.setattr("audio._load_local", lambda: _FakeWhisper(["Welcome", "to the show"]))
+    r = post(client, MP3)
     assert r.status_code == 200
+    assert "Welcome to the show" in backends.calls[0][1]["json"]["messages"][1]["content"]
+    assert any("speech" in n for n in r.json()["notes"])
+
+
+def test_audio_without_speech_422(client, backends, monkeypatch):
+    monkeypatch.setattr("audio._load_local", lambda: _FakeWhisper([]))
+    assert post(client, MP3).status_code == 422
+
+
+def test_audio_without_backend_501(client, backends):
+    assert post(client, MP3).status_code == 501
+
+
+def test_audio_not_sent_to_cloud_unless_chatgpt_chosen(client, backends, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    assert post(client, MP3).status_code == 501  # auto: key is set but audio stays local
+    assert post(client, MP3, provider="ollama").status_code == 501
+    assert not any("transcriptions" in url for url, _ in backends.calls)
+
+
+def test_audio_cloud_transcription_when_chatgpt_chosen(client, backends, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    r = post(client, MP3, provider="openai")
+    assert r.status_code == 200
+    assert any("transcriptions" in url for url, _ in backends.calls)
