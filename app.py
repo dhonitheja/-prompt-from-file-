@@ -7,6 +7,7 @@ request falls back to ChatGPT, then Claude, for whichever API keys are set.
 import base64
 import io
 import os
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -14,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -61,6 +62,57 @@ AUDIO_INSTRUCTION = (
 )
 
 app = FastAPI(title="Prompt from File")
+
+MIN_PASSWORD_LENGTH = 12
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+    ),
+}
+
+
+def check_config() -> None:
+    """Refuse to start in hosted mode without a strong password."""
+    if os.getenv("HOSTED") == "1" and len(os.getenv("APP_PASSWORD", "")) < MIN_PASSWORD_LENGTH:
+        raise RuntimeError(f"HOSTED=1 requires APP_PASSWORD with at least {MIN_PASSWORD_LENGTH} characters.")
+
+
+check_config()
+
+
+def _password_ok(header: str, expected: str) -> bool:
+    if not header.lower().startswith("basic "):
+        return False
+    try:
+        decoded = base64.b64decode(header[6:], validate=True).decode()
+    except ValueError:  # bad base64 or bad UTF-8
+        return False
+    _, _, supplied = decoded.partition(":")  # the username is ignored
+    return secrets.compare_digest(supplied.encode(), expected.encode())
+
+
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    """Require the shared password when APP_PASSWORD is set, and add security headers to every reply."""
+    expected = os.getenv("APP_PASSWORD", "")
+    open_path = request.url.path == "/healthz"
+    if expected and not open_path and not _password_ok(request.headers.get("authorization", ""), expected):
+        response = Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Prompt from File"'})
+    else:
+        response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
 
 # What prepare() returns: instruction, images [(bytes, mime)], text, notes shown to the user
 Prepared = tuple[str, list[tuple[bytes, str]], str | None, list[str]]

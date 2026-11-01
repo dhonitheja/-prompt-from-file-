@@ -11,7 +11,7 @@ Trust boundaries: browser/API client to server; server to model providers; **ser
 | T4 | Prompt injection inside a file, image, transcript or web page | Model output manipulated | Output is shown as text only and never executed or used to take actions | Accepted, low impact |
 | T5 | Data unexpectedly sent to a cloud provider | Privacy loss | Cloud used only when a key is set or explicitly chosen; page shows which model answered; audio needs an explicit opt-in | Done |
 | T6 | API key leakage | Account abuse | Keys only from environment; `.gitignore` excludes `.env`; keys are not logged or returned | Done |
-| T7 | Unauthenticated access if exposed to a network | Anyone can use your model, credits and server | Documented as local-only; run behind an authenticating proxy | Open, documented in `SECURITY.md` |
+| T7 | Unauthenticated access if exposed to a network | Anyone can use your model, credits and server | Shared password (HTTP Basic, constant-time compare) on every page and API route except `/healthz`; hosted mode (`HOSTED=1`, set in the Docker image) refuses to start without a password of 12+ characters | Done for hosting; local mode stays open by design |
 | T8 | Vulnerable dependencies | Various | `pip-audit` in CI | Done |
 | T9 | Cross-site scripting in the page | Script injection | Model output, notes and errors are inserted with `textContent`, never as HTML | Done |
 | T10 | Malformed PDF crashes the parser | 500 error for that request | No shared state between requests | Accepted |
@@ -20,7 +20,11 @@ Trust boundaries: browser/API client to server; server to model providers; **ser
 | T13 | Redirect to an internal address | Bypasses T11 | Redirects are not auto-followed; each `Location` goes through all checks; max 5 | Done |
 | T14 | Slow or endless response from a linked site | Worker held open | 10 s socket timeouts and a 20 s overall deadline; byte cap | Done |
 | T15 | A linked site fingerprints or tracks the server | Minor | Fixed generic User-Agent, no cookies, no stored state | Accepted |
-| T16 | Server used as an open proxy to hit third-party sites | Abuse of your IP | Public-only, GET-only, size and time limits; same exposure as T7 | Open until auth is added |
+| T16 | Server used as an open proxy to hit third-party sites | Abuse of your IP | Public-only, GET-only, size and time limits; behind the T7 password | Mitigated by the password |
+| T18 | Password guessing (no rate limit, one shared password) | Attacker uses your credits | 12-character minimum, generated random value on Render, HTTPS from the platform, constant-time comparison; use provider spending caps | **Open, Medium** for hosting: add rate limiting if it will be shared widely |
+| T19 | Password sent over plain HTTP | Password theft | Docs require HTTPS; hosting platforms terminate TLS | Done (documented) |
+| T20 | A logged-in user runs up API costs | Unexpected bill | Size limit; one shared trust circle; spending caps at the provider | Accepted |
+| T21 | Clickjacking or script injection via the page | Session abuse | `X-Frame-Options: DENY`, `frame-ancestors 'none'`, a Content-Security-Policy, `nosniff`, no HTML built from model output | Done |
 | T17 | A linked page tricks the model into describing something false | Misleading prompt | `notes` states results come from page metadata; user reviews the prompt | Accepted |
 
-No Critical or High risk is open for the intended local use. T7 and T16 become High if the app is deployed on a public network.
+No Critical or High risk is open for local use or for hosting behind HTTPS with a strong password. T18 (password guessing) is the main open item for hosting; it becomes High if the password is short or the URL is widely shared.

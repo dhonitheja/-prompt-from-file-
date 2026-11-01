@@ -1,0 +1,17 @@
+# Render Blueprint: deploys the Dockerfile as a web service.
+# Render dashboard -> New -> Blueprint -> pick this repo.
+services:
+  - type: web
+    name: prompt-from-file
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      # The login password. Render generates a long random one; read it in the service's Environment tab.
+      - key: APP_PASSWORD
+        generateValue: true
+      # Hosting has no local model, so add at least one cloud key (you will be prompted).
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

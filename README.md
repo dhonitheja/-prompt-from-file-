@@ -80,6 +80,8 @@ All settings are environment variables.
 | `ALLOW_CLOUD_TRANSCRIPTION` | unset | Set to `1` to let audio go to OpenAI for transcription in any mode |
 | `VIDEO_FRAMES` | `6` | Frames sampled per video |
 | `MAX_UPLOAD_MB` | `50` | Size limit for uploads and linked files |
+| `APP_PASSWORD` | unset | Turns on the login (any username, this password) |
+| `HOSTED` | unset | `1` refuses to start without a password of 12+ characters (set in the Docker image) |
 
 ## API
 
@@ -121,9 +123,18 @@ Response:
 | 501 | Audio needs speech-to-text and none is set up |
 | 502 | A model or the linked site could not be reached or gave a bad reply |
 
+## Hosting it online
+
+The repo includes a `Dockerfile` and a `render.yaml`. Hosted mode adds a password login, and the container will not start without a strong `APP_PASSWORD`. There is no local model on a hosted server, so you add an OpenAI and/or Anthropic key. Step-by-step instructions are in [docs/deploy.md](docs/deploy.md).
+
+```bash
+docker build -t prompt-from-file .
+docker run -p 8000:8000 -e APP_PASSWORD="$(openssl rand -base64 24)" -e OPENAI_API_KEY=sk-... prompt-from-file
+```
+
 ## Security
 
-The app has no login. Run it on your own machine, or put it behind an authenticating proxy. Links are fetched with protections against requests to private networks. See [SECURITY.md](SECURITY.md).
+Running locally needs no login, so keep it on your own machine. For anything on a network, set `APP_PASSWORD` and use HTTPS. Links are fetched with protections against requests to private networks. See [SECURITY.md](SECURITY.md).
 
 ## Development
 
@@ -142,6 +153,8 @@ app.py             FastAPI backend, file and page preparation, model calls
 sources.py         Safe link fetching and page reading
 audio.py           Speech-to-text
 static/index.html  Upload page
+Dockerfile         Container image for hosting
+render.yaml        Optional Render deploy config
 tests/             API tests (models and network mocked)
 docs/              PRD, architecture, threat model, test plan, project status
 .github/workflows  CI: lint, tests, dependency scan

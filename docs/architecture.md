@@ -47,6 +47,8 @@ For each hop (the first request and every redirect, up to 5):
 | NFR-6 | No secrets in the repo; keys come from environment variables. | `.gitignore` covers `.env`; PR review |
 | NFR-7 | A link can never cause a request to a private, local or metadata address, directly or via redirect. | `test_unsafe_links_rejected` (14 cases), `test_redirect_to_private_address_rejected`, `test_hostname_resolving_to_private_address_rejected` |
 | NFR-8 | One slow request does not block others. | Blocking work runs in a thread pool (`run_in_threadpool`) |
+| NFR-9 | Hosted mode cannot start without a password of 12+ characters, and every route except `/healthz` requires it. | `tests/test_auth.py`; CI "Refuses to start without a password" step |
+| NFR-10 | Every reply carries anti-framing and content-security headers. | `test_security_headers_always_present` |
 
 ## Decisions
 
@@ -58,7 +60,9 @@ For each hop (the first request and every redirect, up to 5):
 
 **ADR-4: Sample frames for video instead of sending video.** Works with every vision model. Trade-off: motion is inferred from frames, and the audio track is ignored. `VIDEO_FRAMES` is configurable.
 
-**ADR-5: No authentication in this version.** The tool is meant to run locally. Hosting it publicly requires a proxy with auth (documented in `SECURITY.md`).
+**ADR-5: One shared password, enforced in the app.** Local use stays open. Setting `APP_PASSWORD` turns on HTTP Basic auth for everything except `/healthz`, and the Docker image sets `HOSTED=1` so it cannot start without a strong password (fail closed). Chosen over user accounts because this is a single-owner tool; trade-off: no per-user control or rate limiting (T18).
+
+**ADR-9: Docker image, platform-neutral.** A plain Dockerfile (non-root user, ffmpeg included, `$PORT` aware, `/healthz` health check) runs on any container host. `render.yaml` is an optional convenience for Render.
 
 **ADR-6: Links are read as metadata, not played or run.** Reading title, description, text and the preview image works for almost any site, app store or game page without a browser engine, accounts or heavy dependencies. Trade-off: JavaScript-only pages yield little. A headless-browser mode could be added later but would widen the attack surface.
 

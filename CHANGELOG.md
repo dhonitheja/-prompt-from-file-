@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- Hosting: `Dockerfile`, `render.yaml`, a `/healthz` endpoint and `docs/deploy.md`.
+- Password login (`APP_PASSWORD`) for every page and API route except `/healthz`. Hosted mode (`HOSTED=1`, set in the image) refuses to start without a password of 12+ characters.
+- Security headers on every reply (CSP, anti-framing, `nosniff`, no referrer).
+- CI builds the Docker image and smoke-tests it.
 - Links: paste a website, app store, game or video page and get a prompt from its title, description, text and preview image. Direct links to image, video, audio, PDF and text files work too.
 - Audio files: speech is transcribed (local `faster-whisper`, or OpenAI if you choose ChatGPT) and turned into a prompt.
 - A `notes` field in the response that says what could not be analyzed.

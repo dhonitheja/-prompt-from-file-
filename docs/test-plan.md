@@ -17,13 +17,18 @@ Automated tests in `tests/` run the API with every model backend and all network
 | US-9 direct file link | `test_direct_image_link`, `test_audio_link`, `test_link_too_large_413` |
 | US-10 audio | `test_audio_transcribed_locally`, `test_audio_without_speech_422`, `test_audio_without_backend_501`, `test_audio_cloud_transcription_when_chatgpt_chosen` |
 | US-11 / NFR-7 no private-network access | `test_unsafe_links_rejected` (14 cases), `test_hostname_resolving_to_private_address_rejected`, `test_host_with_one_private_address_rejected`, `test_redirect_to_private_address_rejected`, `test_redirect_is_followed`, `test_redirect_loop_rejected`, `test_http_error_status_400` |
+| US-12 / NFR-9 / NFR-10 hosting login and headers | `test_pages_require_password` (4 routes), `test_api_requires_password`, `test_correct_password_any_username`, `test_wrong_credentials_rejected` (8 cases), `test_healthz_is_open`, `test_hosted_mode_requires_strong_password`, `test_local_mode_needs_no_password`, `test_security_headers_always_present` |
 | Page served | `test_index_served` |
 
 ## Checked by hand during development (one-off, not automated)
 - **Video (US-2):** a real 3-second MP4 produced 6 frames and a prompt; a corrupt file returned a clear 400.
 - **Pinned-address TLS (ADR-8):** against a local HTTPS server with a self-signed certificate, a request pinned to the checked IP succeeded when the certificate matched the name and failed when it did not.
 
+- **Hosted mode in a real browser (Chromium via Playwright):** the app started the way the container starts it. No credentials and a wrong password gave 401; `/healthz` was open; after logging in, an image upload showed a preview and returned a result; a private-address link showed the refusal message; no Content-Security-Policy violations. Starting with `HOSTED=1` and no password exited with an error.
+
 ## Not yet verified (manual before release)
+- **The Docker image itself:** the Docker daemon was unavailable where this was built, so the image was never built or run here. The CI `docker` job builds it, checks it refuses to start without a password, and smoke-tests login and ffmpeg. The first green CI run is the proof.
+- **An actual deployment** (Render or other): not done from here; use the checklist in `docs/deploy.md`.
 - Real model quality with Ollama, ChatGPT and Claude: confirm each returns the Prompt / Negative prompt / Key details format.
 - Real speech transcription with `faster-whisper` and with OpenAI.
 - Real websites, app store pages, game pages and a YouTube link: confirm what is and isn't read, and that the notes are accurate.

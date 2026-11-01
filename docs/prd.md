@@ -24,6 +24,7 @@ People who see an image or video they like want to recreate or vary it with an A
 | US-9 | I paste a direct link to an image, video, audio, PDF or text file. | It is downloaded (within the size limit) and handled like an upload. |
 | US-10 | I upload audio and get a prompt from what is said. | Speech is transcribed locally when possible. Audio is only sent to a cloud service when I choose ChatGPT or opt in. A file with no speech returns a clear message. |
 | US-11 | Pasting a link cannot be used to reach my private network. | Localhost, private, link-local and metadata addresses are refused, including via redirects. |
+| US-12 | I can host it online and only I (and people I give the password to) can use it. | A Docker image runs on a standard host; every page and API route requires a shared password; the hosted image won't start without a strong one. Added 2026-10-31 at the owner's request. |
 
 ## Scope
 In: single-file upload or single link, web page, JSON API, three model backends, speech transcription.
@@ -34,7 +35,7 @@ In: single-file upload or single link, web page, JSON API, three model backends,
 - Game and app binaries (executables, ROMs, installers). Use screenshots, gameplay video or the store link.
 - Accounts, history, or storing uploads.
 - Recovering the real original prompt or hidden metadata. Output is a reconstruction.
-- Multi-user hosting. There is no authentication (see `SECURITY.md`).
+- Multi-user accounts, per-user limits or billing. Hosting uses one shared password (see `docs/deploy.md`).
 
 ## Top risks
 1. Local vision models can give weak prompts. Mitigation: configurable model, cloud fallback.

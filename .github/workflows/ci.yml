@@ -21,3 +21,24 @@ jobs:
         run: pytest -q
       - name: Dependency vulnerability scan
         run: pip-audit -r requirements.txt
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t prompt-from-file .
+      - name: Refuses to start without a password
+        run: |
+          if docker run --rm prompt-from-file >/dev/null 2>&1; then
+            echo "container started without APP_PASSWORD"; exit 1
+          fi
+      - name: Smoke test
+        run: |
+          docker run -d --name app -e APP_PASSWORD=ci-test-password-123 -p 8000:8000 prompt-from-file
+          for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz && break || sleep 1; done
+          curl -fsS http://localhost:8000/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u u:ci-test-password-123 http://localhost:8000/)" = "200"
+          docker exec app ffmpeg -version | head -1
+          docker logs app
