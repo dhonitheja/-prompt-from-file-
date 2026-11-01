@@ -1,0 +1,11 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "B", "S"]
+# B008: FastAPI's File()/Form() defaults are the framework's idiom.
+# S603/S607: ffmpeg/ffprobe run with a fixed argument list (no shell); the only variable is a temp-dir path we create.
+# S101: asserts are fine in tests.
+ignore = ["B008", "S603", "S607"]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]

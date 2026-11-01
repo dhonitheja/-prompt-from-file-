@@ -97,12 +97,28 @@ Response:
 
 Errors return JSON with a `detail` message: `415` for an unsupported type, `413` for a file over the size limit, `502` if the model backend can't be reached.
 
+## Security
+
+The app has no login. Run it on your own machine, or put it behind an authenticating proxy. See [SECURITY.md](SECURITY.md).
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+pytest -q
+```
+
+Tests mock all model backends, so they need no Ollama or API keys. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Project layout
 
 ```
 app.py             FastAPI backend and model calls
 static/index.html  Upload page
-requirements.txt   Python dependencies
+tests/             API tests (backends mocked)
+docs/              PRD, architecture, threat model, test plan, project status
+.github/workflows  CI: lint, tests, dependency scan
 ```
 
 ## Tips and limits

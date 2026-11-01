@@ -33,7 +33,8 @@ SYSTEM = """You reverse-engineer prompts. Given an uploaded file (or frames from
 write the prompt someone could give a generative AI tool to recreate it.
 
 Respond in this format:
-**Prompt:** one polished, ready-to-paste prompt (subject, style, composition, lighting, color, mood, camera/motion if video).
+**Prompt:** one polished, ready-to-paste prompt
+(subject, style, composition, lighting, color, mood, camera/motion if video).
 **Negative prompt:** things to avoid (only for image/video).
 **Key details:** 3-5 short bullets on what drove the prompt.
 
@@ -44,26 +45,26 @@ app = FastAPI(title="Prompt from File")
 
 
 def video_frames(data: bytes, suffix: str) -> list[bytes]:
-    if not shutil.which("ffmpeg"):
-        raise HTTPException(500, "ffmpeg is required for video. Install it and retry.")
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        raise HTTPException(500, "ffmpeg and ffprobe are required for video. Install them and retry.")
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / f"in{suffix or '.mp4'}"
         src.write_bytes(data)
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=nw=1:nk=1", str(src)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, timeout=30,
         )
         try:
             duration = float(probe.stdout.strip())
         except ValueError:
-            raise HTTPException(400, "Could not read this video.")
+            raise HTTPException(400, "Could not read this video.") from None
         fps = VIDEO_FRAMES / max(duration, 0.1)
         subprocess.run(
             ["ffmpeg", "-v", "error", "-i", str(src), "-vf",
              f"fps={fps:.4f},scale='min(768,iw)':-2", "-frames:v", str(VIDEO_FRAMES),
              str(Path(tmp) / "f_%02d.jpg")],
-            check=False,
+            check=False, timeout=120,
         )
         frames = sorted(Path(tmp).glob("f_*.jpg"))
         if not frames:
@@ -75,7 +76,7 @@ def pdf_text(data: bytes) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:
-        raise HTTPException(500, "pypdf is required for PDFs: pip install pypdf")
+        raise HTTPException(500, "pypdf is required for PDFs: pip install pypdf") from None
     reader = PdfReader(io.BytesIO(data))
     return "\n".join((p.extract_text() or "") for p in reader.pages)[:100_000]
 
@@ -110,7 +111,7 @@ def run_ollama(instruction: str, images: list[tuple[bytes, str]], text: str | No
             timeout=600,
         )
     except httpx.ConnectError:
-        raise HTTPException(502, f"Can't reach Ollama at {OLLAMA_URL}. Is it running? (ollama serve)")
+        raise HTTPException(502, f"Can't reach Ollama at {OLLAMA_URL}. Is it running? (ollama serve)") from None
     if r.status_code != 200:
         raise HTTPException(502, f"Ollama error: {r.text[:300]}")
     return r.json()["message"]["content"]
@@ -134,7 +135,7 @@ def run_openai(instruction: str, images: list[tuple[bytes, str]], text: str | No
             timeout=120,
         )
     except httpx.HTTPError as e:
-        raise HTTPException(502, f"Can't reach OpenAI: {e}")
+        raise HTTPException(502, f"Can't reach OpenAI: {e}") from None
     if r.status_code != 200:
         raise HTTPException(502, f"OpenAI error: {r.text[:300]}")
     return r.json()["choices"][0]["message"]["content"]
@@ -158,7 +159,7 @@ def run_claude(instruction: str, images: list[tuple[bytes, str]], text: str | No
             timeout=120,
         )
     except httpx.HTTPError as e:
-        raise HTTPException(502, f"Can't reach Claude: {e}")
+        raise HTTPException(502, f"Can't reach Claude: {e}") from None
     if r.status_code != 200:
         raise HTTPException(502, f"Claude error: {r.text[:300]}")
     return "".join(b.get("text", "") for b in r.json()["content"] if b.get("type") == "text")
@@ -170,13 +171,16 @@ FALLBACK_KEYS = [("openai", "OPENAI_API_KEY"), ("claude", "ANTHROPIC_API_KEY")]
 
 @app.post("/api/prompt")
 async def make_prompt(file: UploadFile = File(...), note: str = Form(""), provider: str = Form("")):
-    data = await file.read()
+    data = await file.read(MAX_BYTES + 1)  # never buffer more than the limit
     if len(data) > MAX_BYTES:
         raise HTTPException(413, f"File too large (max {MAX_BYTES // 1024 // 1024} MB).")
     if not data:
         raise HTTPException(400, "Empty file.")
     mime = file.content_type or ""
-    instruction, images, text = prepare(file.filename or "upload", mime, data)
+    try:
+        instruction, images, text = prepare(file.filename or "upload", mime, data)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(400, "Video processing timed out. Try a shorter or smaller video.") from None
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
     choice = (provider or PROVIDER).lower()
@@ -193,6 +197,8 @@ async def make_prompt(file: UploadFile = File(...), note: str = Form(""), provid
             break
         except HTTPException as e:
             last_error = e
+        except (KeyError, IndexError, TypeError, ValueError):
+            last_error = HTTPException(502, f"{used} returned an unexpected response.")
     else:
         raise last_error
     return {"filename": file.filename, "type": mime, "provider": used, "prompt": result}
