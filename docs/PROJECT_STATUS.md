@@ -7,7 +7,7 @@
 
 | Phase | Gate | State |
 |---|---|---|
-| 1 Discover | PRD signed off, top risks listed | Done: `docs/prd.md` (11 user stories; awaiting owner sign-off) |
+| 1 Discover | PRD signed off, top risks listed | Done: `docs/prd.md` (11 user stories; scope signed off by the owner on 2026-10-31) |
 | 2 Design | Reviewed design, measurable NFRs, threat model with mitigations | Done: `docs/architecture.md` (8 ADRs, 8 NFRs), `docs/threat-model.md` (17 threats) |
 | 3 Plan | First slice small and shippable | Done: slice 1 (files) and slice 2 (links and audio) are built |
 | 4 Build | DoD met: tests with code, CI config | Done: 50 tests, ruff clean, CI workflow added |
@@ -22,7 +22,7 @@
 - Real-world quality of local models, transcription and live sites is untested.
 
 ## Decisions needed from the owner
-1. Sign off the PRD scope, including the non-goals (music analysis, playing videos or running apps and games, headless-browser rendering).
+1. ~~Sign off the PRD scope, including the non-goals~~ Done 2026-10-31.
 2. Is hosted deployment wanted? If yes, authentication and a deploy pipeline come first.
 
 ## Next 3 actions

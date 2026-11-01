@@ -1,5 +1,7 @@
 # Product Requirements: Prompt from File
 
+**Status:** Approved by the owner on 2026-10-31, including the non-goals below.
+
 ## Problem
 People who see an image or video they like want to recreate or vary it with an AI generation tool, but writing a good prompt from scratch is slow. People with a document or code file sometimes want the instruction that would regenerate it.
 
