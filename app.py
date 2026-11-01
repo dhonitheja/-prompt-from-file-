@@ -21,6 +21,8 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2-vision")  # any vision model: qwen2.5vl, llava, gemma3...
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # any vision-capable OpenAI model
 OPENAI_URL = os.getenv("OPENAI_URL", "https://api.openai.com/v1/chat/completions")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
+CLAUDE_URL = os.getenv("CLAUDE_URL", "https://api.anthropic.com/v1/messages")
 MAX_BYTES = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 VIDEO_FRAMES = int(os.getenv("VIDEO_FRAMES", "6"))
 
@@ -138,6 +140,34 @@ def run_openai(instruction: str, images: list[tuple[bytes, str]], text: str | No
     return r.json()["choices"][0]["message"]["content"]
 
 
+def run_claude(instruction: str, images: list[tuple[bytes, str]], text: str | None) -> str:
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        raise HTTPException(502, "ANTHROPIC_API_KEY is not set.")
+    blocks = []
+    for b, m in images:
+        blocks.append({"type": "image", "source": {"type": "base64", "media_type": m,
+                                                     "data": base64.b64encode(b).decode()}})
+    blocks.append({"type": "text", "text": instruction + (f"\n\nFile content:\n{text}" if text else "")})
+    try:
+        r = httpx.post(
+            CLAUDE_URL,
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+            json={"model": CLAUDE_MODEL, "max_tokens": 1500, "system": SYSTEM,
+                  "messages": [{"role": "user", "content": blocks}]},
+            timeout=120,
+        )
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Can't reach Claude: {e}")
+    if r.status_code != 200:
+        raise HTTPException(502, f"Claude error: {r.text[:300]}")
+    return "".join(b.get("text", "") for b in r.json()["content"] if b.get("type") == "text")
+
+
+RUNNERS = {"ollama": run_ollama, "openai": run_openai, "claude": run_claude}
+FALLBACK_KEYS = [("openai", "OPENAI_API_KEY"), ("claude", "ANTHROPIC_API_KEY")]
+
+
 @app.post("/api/prompt")
 async def make_prompt(file: UploadFile = File(...), note: str = Form(""), provider: str = Form("")):
     data = await file.read()
@@ -150,21 +180,21 @@ async def make_prompt(file: UploadFile = File(...), note: str = Form(""), provid
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
     choice = (provider or PROVIDER).lower()
-    if choice not in {"auto", "ollama", "openai"}:
-        raise HTTPException(400, "provider must be auto, ollama or openai.")
-    if choice == "openai":
-        used, result = "openai", run_openai(instruction, images, text)
-    elif choice == "ollama":
-        used, result = "ollama", run_ollama(instruction, images, text)
-    else:  # auto: local first, ChatGPT if it fails and a key is set
-        used = "ollama"
+    if choice != "auto" and choice not in RUNNERS:
+        raise HTTPException(400, "provider must be auto, ollama, openai or claude.")
+    if choice == "auto":  # local first, then ChatGPT, then Claude (whichever keys are set)
+        chain = ["ollama"] + [name for name, env in FALLBACK_KEYS if os.getenv(env)]
+    else:
+        chain = [choice]
+    last_error: HTTPException | None = None
+    for used in chain:
         try:
-            result = run_ollama(instruction, images, text)
-        except HTTPException:
-            if not os.getenv("OPENAI_API_KEY"):
-                raise
-            used = "openai"
-            result = run_openai(instruction, images, text)
+            result = RUNNERS[used](instruction, images, text)
+            break
+        except HTTPException as e:
+            last_error = e
+    else:
+        raise last_error
     return {"filename": file.filename, "type": mime, "provider": used, "prompt": result}
 
 

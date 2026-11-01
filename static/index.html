@@ -24,9 +24,10 @@
 <img id="preview"><video id="vpreview" controls style="display:none;max-width:100%;max-height:260px;margin-top:1rem"></video>
 <input id="note" type="text" placeholder="Optional: extra context (e.g. 'for Midjourney')">
 <select id="provider" style="margin-top:1rem;padding:.6rem;width:100%">
-  <option value="">Auto: local model, ChatGPT if it fails</option>
+  <option value="">Auto: local model, then ChatGPT, then Claude</option>
   <option value="ollama">Local model only (Ollama)</option>
   <option value="openai">ChatGPT only</option>
+  <option value="claude">Claude only</option>
 </select>
 <button id="go" disabled>Generate prompt</button>
 <div id="used" style="color:#666;font-size:.9rem;margin-top:.5rem"></div>
@@ -56,7 +57,7 @@ $('go').onclick=async()=>{
     const r=await fetch('/api/prompt',{method:'POST',body:fd});
     const j=await r.json();
     if(!r.ok)throw new Error(j.detail||'Request failed');
-    $('used').textContent='Answered by: '+(j.provider==='openai'?'ChatGPT':'local model');
+    $('used').textContent='Answered by: '+({openai:'ChatGPT',claude:'Claude',ollama:'local model'}[j.provider]||j.provider);
     $('out').textContent=j.prompt;$('out').style.display='block';$('copy').style.display='inline-block';
   }catch(e){$('err').textContent=e.message}
   $('go').disabled=false;$('go').textContent='Generate prompt';
