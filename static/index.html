@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt from File</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:680px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+  #drop{border:2px dashed #999;border-radius:12px;padding:2.5rem 1rem;text-align:center;cursor:pointer}
+  #drop.over{background:#eef4ff;border-color:#3b6fe0}
+  #preview{max-width:100%;max-height:260px;margin-top:1rem;border-radius:8px;display:none}
+  input[type=text]{width:100%;padding:.6rem;margin-top:1rem;box-sizing:border-box}
+  button{margin-top:1rem;padding:.7rem 1.2rem;border:0;border-radius:8px;background:#3b6fe0;color:#fff;font-size:1rem;cursor:pointer}
+  button:disabled{opacity:.5}
+  #out{white-space:pre-wrap;background:#f6f6f6;border-radius:8px;padding:1rem;margin-top:1rem;display:none}
+  #err{color:#b00020;margin-top:1rem}
+</style>
+</head>
+<body>
+<h1>Prompt from File</h1>
+<p>Upload an image, video, PDF or text file and get the prompt behind it.</p>
+<div id="drop">Drop a file here or click to choose</div>
+<input id="file" type="file" hidden accept="image/*,video/*,application/pdf,text/*,.md,.csv,.json,.py,.js,.ts">
+<img id="preview"><video id="vpreview" controls style="display:none;max-width:100%;max-height:260px;margin-top:1rem"></video>
+<input id="note" type="text" placeholder="Optional: extra context (e.g. 'for Midjourney')">
+<button id="go" disabled>Generate prompt</button>
+<div id="err"></div>
+<div id="out"></div>
+<button id="copy" style="display:none;background:#444">Copy</button>
+<script>
+const $=id=>document.getElementById(id);
+let file=null;
+function setFile(f){
+  file=f; $('drop').textContent=f.name; $('go').disabled=false;
+  $('preview').style.display=$('vpreview').style.display='none';
+  const url=URL.createObjectURL(f);
+  if(f.type.startsWith('image/')){$('preview').src=url;$('preview').style.display='block'}
+  else if(f.type.startsWith('video/')){$('vpreview').src=url;$('vpreview').style.display='block'}
+}
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=e=>e.target.files[0]&&setFile(e.target.files[0]);
+$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('over')};
+$('drop').ondragleave=()=>$('drop').classList.remove('over');
+$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('over');e.dataTransfer.files[0]&&setFile(e.dataTransfer.files[0])};
+$('go').onclick=async()=>{
+  $('err').textContent='';$('out').style.display='none';$('copy').style.display='none';
+  $('go').disabled=true;$('go').textContent='Analyzing…';
+  const fd=new FormData();fd.append('file',file);fd.append('note',$('note').value);
+  try{
+    const r=await fetch('/api/prompt',{method:'POST',body:fd});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.detail||'Request failed');
+    $('out').textContent=j.prompt;$('out').style.display='block';$('copy').style.display='inline-block';
+  }catch(e){$('err').textContent=e.message}
+  $('go').disabled=false;$('go').textContent='Generate prompt';
+};
+$('copy').onclick=()=>navigator.clipboard.writeText($('out').textContent);
+</script>
+</body>
+</html>
