@@ -24,6 +24,7 @@ People who see an image or video they like want to recreate or vary it with an A
 | US-9 | I paste a direct link to an image, video, audio, PDF or text file. | It is downloaded (within the size limit) and handled like an upload. |
 | US-10 | I upload audio and get a prompt from what is said. | Speech is transcribed locally when possible. Audio is only sent to a cloud service when I choose ChatGPT or opt in. A file with no speech returns a clear message. |
 | US-11 | Pasting a link cannot be used to reach my private network. | Localhost, private, link-local and metadata addresses are refused, including via redirects. |
+| US-13 | I choose which tool the prompt is for. | Page and API accept a target (Midjourney, Stable Diffusion/Flux, ChatGPT image, video, voiceover, app builder, chat). The model is told to write for that tool. Unknown targets are rejected before any work is done. Added 2026-11-02 after the owner's review. |
 | US-12 | I can host it online and only I (and people I give the password to) can use it. | A Docker image runs on a standard host; every page and API route requires a shared password; the hosted image won't start without a strong one. Added 2026-10-31 at the owner's request. |
 
 ## Scope

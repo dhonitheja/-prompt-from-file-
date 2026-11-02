@@ -61,6 +61,41 @@ AUDIO_INSTRUCTION = (
     "message, the likely speaker style, pacing and format (for example a voiceover, podcast or call)."
 )
 
+# The tool the prompt is for. The empty target keeps the general-purpose format.
+TARGETS: dict[str, str] = {
+    "": "",
+    "midjourney": (
+        "Write the prompt for Midjourney: one line of vivid descriptive phrases (subject, setting, style, "
+        "lighting, camera or lens, mood), ending with parameters such as --ar for aspect ratio and --no for "
+        "things to exclude."
+    ),
+    "stable-diffusion": (
+        "Write the prompt for Stable Diffusion or Flux: comma-separated keywords and short phrases ordered "
+        "from most to least important, plus a separate negative prompt."
+    ),
+    "dalle": (
+        "Write the prompt for ChatGPT image generation (DALL-E style): clear natural-language sentences "
+        "describing the scene, style and composition. There is no negative prompt, so say what to include instead."
+    ),
+    "video": (
+        "Write the prompt for a text-to-video tool (such as Sora, Veo or Runway): subject and action, setting, "
+        "shot type, camera movement, lighting, style and pacing. Keep it to one scene unless the source clearly "
+        "has several."
+    ),
+    "voice": (
+        "Write the prompt for a text-to-speech or voiceover tool: the script, then direction for voice, tone, "
+        "pace and emphasis."
+    ),
+    "app-builder": (
+        "Write the prompt for an AI app or website builder (such as Lovable, v0 or Bolt): purpose, audience, "
+        "pages or screens, core features, data, visual style and tone."
+    ),
+    "chat": (
+        "Write the prompt for a chat assistant such as ChatGPT or Claude: state the role, the task, the "
+        "context, the constraints and the desired output format."
+    ),
+}
+
 app = FastAPI(title="Prompt from File")
 
 MIN_PASSWORD_LENGTH = 12
@@ -283,7 +318,7 @@ RUNNERS = {"ollama": run_ollama, "openai": run_openai, "claude": run_claude}
 FALLBACK_KEYS = [("openai", "OPENAI_API_KEY"), ("claude", "ANTHROPIC_API_KEY")]
 
 
-def _handle(name: str, mime: str, data: bytes | None, url: str, note: str, provider: str) -> dict:
+def _handle(name: str, mime: str, data: bytes | None, url: str, note: str, provider: str, target: str = "") -> dict:
     choice = (provider or PROVIDER).lower()
     if choice != "auto" and choice not in RUNNERS:
         raise HTTPException(400, "provider must be auto, ollama, openai or claude.")
@@ -299,6 +334,8 @@ def _handle(name: str, mime: str, data: bytes | None, url: str, note: str, provi
     except subprocess.TimeoutExpired:
         raise HTTPException(400, "Video processing timed out. Try a shorter or smaller video.") from None
     instruction, images, text, notes = prepared
+    if TARGETS[target]:
+        instruction += f"\nTarget tool: {TARGETS[target]}"
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
 
@@ -317,7 +354,7 @@ def _handle(name: str, mime: str, data: bytes | None, url: str, note: str, provi
             last_error = HTTPException(502, f"{used} returned an unexpected response.")
     else:
         raise last_error
-    return {"source": source, "type": mime, "provider": used, "notes": notes, "prompt": result}
+    return {"source": source, "type": mime, "provider": used, "target": target, "notes": notes, "prompt": result}
 
 
 @app.post("/api/prompt")
@@ -326,8 +363,12 @@ async def make_prompt(
     url: str = Form(""),
     note: str = Form(""),
     provider: str = Form(""),
+    target: str = Form(""),
 ):
     url = url.strip()
+    target = target.strip().lower()
+    if target not in TARGETS:
+        raise HTTPException(400, f"target must be one of: {', '.join(t for t in TARGETS if t)}.")
     if bool(file) == bool(url):
         raise HTTPException(400, "Send either a file or a link, not both and not neither.")
     name, mime, data = "", "", None
@@ -339,7 +380,7 @@ async def make_prompt(
             raise HTTPException(400, "Empty file.")
         name, mime = file.filename or "upload", file.content_type or ""
     # Blocking work (downloads, ffmpeg, model calls) runs off the event loop.
-    return await run_in_threadpool(_handle, name, mime, data, url, note, provider)
+    return await run_in_threadpool(_handle, name, mime, data, url, note, provider, target)
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

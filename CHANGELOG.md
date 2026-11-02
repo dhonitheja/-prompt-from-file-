@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Target tool: choose Midjourney, Stable Diffusion/Flux, ChatGPT image, text-to-video, voiceover, app builder or chat assistant, and the prompt is written in that tool's style. New `target` field in the API and a dropdown on the page.
 - Hosting: `Dockerfile`, `render.yaml`, a `/healthz` endpoint and `docs/deploy.md`.
 - Password login (`APP_PASSWORD`) for every page and API route except `/healthz`. Hosted mode (`HOSTED=1`, set in the image) refuses to start without a password of 12+ characters.
 - Security headers on every reply (CSP, anti-framing, `nosniff`, no referrer).

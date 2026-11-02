@@ -47,6 +47,23 @@ uvicorn app:app --reload
 
 Open http://localhost:8000, then drop a file or paste a link and click **Generate prompt**. Add optional context in the text box, such as "for Midjourney".
 
+## Choose which tool the prompt is for
+
+Different tools want different prompts. Pick a target on the page, or send `target` in the API, and the prompt is written in that tool's style:
+
+| Target | Writes the prompt for |
+|---|---|
+| (none) | Any tool, a general format |
+| `midjourney` | Midjourney: descriptive phrases ending in parameters such as `--ar` and `--no` |
+| `stable-diffusion` | Stable Diffusion or Flux: comma-separated keywords plus a negative prompt |
+| `dalle` | ChatGPT image generation: natural sentences, no negative prompt |
+| `video` | Text-to-video tools (Sora, Veo, Runway): subject, action, shot, camera, pacing |
+| `voice` | Voiceover or text-to-speech: the script plus voice and pacing direction |
+| `app-builder` | App or website builders (Lovable, v0, Bolt): purpose, screens, features, style |
+| `chat` | Chat assistants: role, task, context, constraints, output format |
+
+The target works with any input. Tool names and conventions change over time, so treat the result as a strong first draft and adjust it to the tool you use.
+
 ## Choosing a model: local, ChatGPT or Claude
 
 Three backends are supported. Add an API key for the cloud ones you want:
@@ -99,6 +116,7 @@ curl -F "url=https://example.com/my-game" http://localhost:8000/api/prompt
 - `url`: an http or https link
 - `note` (optional): extra context for the model
 - `provider` (optional): `auto`, `ollama`, `openai` or `claude`; defaults to `LLM_PROVIDER`
+- `target` (optional): `midjourney`, `stable-diffusion`, `dalle`, `video`, `voice`, `app-builder` or `chat`
 
 Response:
 
@@ -107,6 +125,7 @@ Response:
   "source": "photo.jpg",
   "type": "image/jpeg",
   "provider": "ollama",
+  "target": "",
   "notes": [],
   "prompt": "**Prompt:** ..."
 }
@@ -116,7 +135,7 @@ Response:
 
 | Code | Meaning |
 |---|---|
-| 400 | Bad request: missing or double input, empty file, unusable video, a link that is invalid or points to a private address |
+| 400 | Bad request: missing or double input, unknown `target` or `provider`, empty file, unusable video, a link that is invalid or points to a private address |
 | 413 | File or linked file over the size limit |
 | 415 | Unsupported file type |
 | 422 | Nothing could be read: a page with no content, or audio with no speech |
