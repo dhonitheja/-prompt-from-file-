@@ -56,6 +56,12 @@ PAGE_INSTRUCTION = (
     "features, screens or levels, visual style and tone. If it is a video or media page, write the prompt "
     "for the content it describes. Use only what the details support."
 )
+VIDEO_INSTRUCTION = (
+    "The image is a contact sheet of {n} frames taken at equal intervals from ONE video, in time order: "
+    "left to right, then top to bottom. This is a video, not a photo. Write a single prompt that recreates "
+    "the whole video. Describe the subject, setting and style, then what changes from frame to frame: "
+    "motion, camera movement, shot changes and pacing, in order."
+)
 AUDIO_INSTRUCTION = (
     "This is the transcript of an audio file. Write the prompt that would recreate it: the script or "
     "message, the likely speaker style, pacing and format (for example a voiceover, podcast or call)."
@@ -153,7 +159,11 @@ def healthz():
 Prepared = tuple[str, list[tuple[bytes, str]], str | None, list[str]]
 
 
-def video_frames(data: bytes, suffix: str) -> list[bytes]:
+def video_sheet(data: bytes, suffix: str) -> tuple[bytes, int]:
+    """Sample frames from a video and tile them into ONE contact-sheet image. Returns (jpeg, frame_count).
+
+    One image works with every vision model. Several separate images do not: some local models
+    (for example llama3.2-vision) only look at a single image per request."""
     if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
         raise HTTPException(500, "ffmpeg and ffprobe are required for video. Install them and retry.")
     with tempfile.TemporaryDirectory() as tmp:
@@ -178,7 +188,18 @@ def video_frames(data: bytes, suffix: str) -> list[bytes]:
         frames = sorted(Path(tmp).glob("f_*.jpg"))
         if not frames:
             raise HTTPException(400, "No frames could be extracted from this video.")
-        return [f.read_bytes() for f in frames]
+        cols = 3 if len(frames) <= 6 else 4
+        rows = -(-len(frames) // cols)
+        sheet = Path(tmp) / "sheet.jpg"
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-framerate", "1", "-i", str(Path(tmp) / "f_%02d.jpg"),
+             "-vf", f"scale=512:-2,tile={cols}x{rows}:padding=4:color=black",
+             "-frames:v", "1", "-q:v", "3", str(sheet)],
+            check=False, timeout=60,
+        )
+        if not sheet.exists():
+            raise HTTPException(400, "Could not build a frame sheet from this video.")
+        return sheet.read_bytes(), len(frames)
 
 
 def pdf_text(data: bytes) -> str:
@@ -195,11 +216,10 @@ def prepare(name: str, mime: str, data: bytes, allow_cloud: bool = False) -> Pre
     if mime in IMAGE_TYPES:
         return "Write the prompt that would recreate this image.", [(data, mime)], None, []
     if mime.startswith("video/"):
-        frames = [(f, "image/jpeg") for f in video_frames(data, ext)]
+        sheet, count = video_sheet(data, ext)
         return (
-            "These are evenly spaced frames from one video. Write the prompt that would "
-            "recreate the whole video, including motion and camera work.",
-            frames, None, ["Only sampled frames are analyzed. The audio track is not."],
+            VIDEO_INSTRUCTION.format(n=count), [(sheet, "image/jpeg")], None,
+            [f"The video was reduced to {count} frames in one contact sheet. The audio track is not analyzed."],
         )
     if mime.startswith("audio/") or ext in AUDIO_EXTS:
         transcript = transcribe(name, mime, data, allow_cloud).strip()
@@ -334,8 +354,10 @@ def _handle(name: str, mime: str, data: bytes | None, url: str, note: str, provi
     except subprocess.TimeoutExpired:
         raise HTTPException(400, "Video processing timed out. Try a shorter or smaller video.") from None
     instruction, images, text, notes = prepared
-    if TARGETS[target]:
-        instruction += f"\nTarget tool: {TARGETS[target]}"
+    # A video with no chosen target still gets a video-style prompt, never an image prompt.
+    guidance = TARGETS[target or ("video" if mime.startswith("video/") else "")]
+    if guidance:
+        instruction += f"\nTarget tool: {guidance}"
     if note.strip():
         instruction += f"\nExtra context from the user: {note.strip()}"
 

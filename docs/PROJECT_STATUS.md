@@ -10,7 +10,7 @@
 | 1 Discover | PRD signed off, top risks listed | Done: `docs/prd.md` (13 user stories; scope signed off by the owner on 2026-10-31; US-12 hosting added at the owner's request) |
 | 2 Design | Reviewed design, measurable NFRs, threat model with mitigations | Done: `docs/architecture.md` (9 ADRs, 10 NFRs), `docs/threat-model.md` (21 threats) |
 | 3 Plan | First slice small and shippable | Done: slices for files, links and audio, and hosting are built |
-| 4 Build | DoD met: tests with code, CI config | Done: 81 tests, ruff clean, CI with lint, tests, dependency scan and a Docker job |
+| 4 Build | DoD met: tests with code, CI config | Done: 88 tests, ruff clean, CI with lint, tests, dependency scan and a Docker job |
 | 5 Verify | No open Critical/High; QA exit criteria met | Partly: automated checks pass, `pip-audit` clean, video, pinned-TLS and the hosted app in a real browser checked by hand. Real models, real sites, real transcription and the Docker image are not yet verified (see `docs/test-plan.md`) |
 | 6 Release | Staging, deploy pipeline, rollback, runbooks, monitoring | Partly: Dockerfile, health check, `render.yaml`, deploy guide and a post-deploy checklist are written. Not deployed. Rollback is redeploying a previous commit. No monitoring beyond the platform's health check and logs |
 | 7 Operate and learn | SLOs, incidents, feedback loop | Not started |

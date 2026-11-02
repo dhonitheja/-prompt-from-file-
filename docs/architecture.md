@@ -58,7 +58,7 @@ For each hop (the first request and every redirect, up to 5):
 
 **ADR-3: Auto fallback order is local, ChatGPT, Claude.** Matches the owner's stated preference. Providers without a key are skipped, so Auto never silently sends data anywhere unless a key was configured.
 
-**ADR-4: Sample frames for video instead of sending video.** Works with every vision model. Trade-off: motion is inferred from frames, and the audio track is ignored. `VIDEO_FRAMES` is configurable.
+**ADR-4: Sample frames for video and tile them into one contact sheet.** Works with every vision model, including those that accept only one image per request (a first version sent separate images and got image-style prompts back). The instruction tells the model the sheet is one video in time order. Trade-off: motion is inferred from frame differences, detail per frame is lower, and the audio track is ignored. `VIDEO_FRAMES` is configurable.
 
 **ADR-5: One shared password, enforced in the app.** Local use stays open. Setting `APP_PASSWORD` turns on HTTP Basic auth for everything except `/healthz`, and the Docker image sets `HOSTED=1` so it cannot start without a strong password (fail closed). Chosen over user accounts because this is a single-owner tool; trade-off: no per-user control or rate limiting (T18).
 

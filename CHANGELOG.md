@@ -16,6 +16,9 @@
 - Provider selector on the upload page and a `provider` API field.
 - Tests, CI (lint, tests, dependency scan), and project docs.
 
+### Fixed
+- Videos produced image-style prompts. Frames were sent as separate images, and some local vision models (such as llama3.2-vision) only look at one image per request. Frames are now tiled into one contact sheet in time order, the model is told it is a video, and a video with no chosen target gets a video-style prompt.
+
 ### Changed
 - The response field `filename` is now `source` (a file name or a link).
 - Model calls, downloads and ffmpeg now run off the main event loop, so one slow request no longer blocks others.

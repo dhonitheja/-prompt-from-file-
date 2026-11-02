@@ -18,7 +18,7 @@ It runs on a **local model through [Ollama](https://ollama.com)** by default, so
 | Input | How it is handled | Needs |
 |---|---|---|
 | Images (JPEG, PNG, GIF, WebP), including game screenshots | Sent to the model directly | Vision model |
-| Video | Sampled into evenly spaced frames, sent together | Vision model, `ffmpeg` |
+| Video | Sampled into evenly spaced frames and tiled into one contact-sheet image, so it works even with models that only accept a single image. Written up as a video prompt by default | Vision model, `ffmpeg` |
 | Audio (MP3, WAV, M4A, FLAC, OGG) | Speech is transcribed, then turned into a prompt | `faster-whisper` (local), or ChatGPT |
 | PDF | Text is extracted and sent | Any model |
 | Text and code | Sent as text | Any model |
@@ -182,6 +182,6 @@ docs/              PRD, architecture, threat model, test plan, project status
 ## Tips and limits
 
 - Prompt quality depends on the model. Small models like `llava` give rougher results than `qwen2.5vl`, ChatGPT or Claude.
-- A local model sees only the sampled video frames, so motion and camera work are inferred from them. The video's audio track is not analyzed. Raise `VIDEO_FRAMES` for longer videos, at the cost of speed.
+- A model sees a video only as a contact sheet of sampled frames (6 by default), so motion and camera work are inferred from how the frames change. The audio track is not analyzed. Raise `VIDEO_FRAMES` (up to about 12) for longer videos, at the cost of detail per frame.
 - The first request can be slow while Ollama (or the Whisper model) loads.
 - The result is an educated reconstruction, not the original prompt. The app describes what it can see or read and does not recover hidden metadata.

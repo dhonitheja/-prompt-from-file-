@@ -19,6 +19,7 @@ Automated tests in `tests/` run the API with every model backend and all network
 | US-11 / NFR-7 no private-network access | `test_unsafe_links_rejected` (14 cases), `test_hostname_resolving_to_private_address_rejected`, `test_host_with_one_private_address_rejected`, `test_redirect_to_private_address_rejected`, `test_redirect_is_followed`, `test_redirect_loop_rejected`, `test_http_error_status_400` |
 | US-12 / NFR-9 / NFR-10 hosting login and headers | `test_pages_require_password` (4 routes), `test_api_requires_password`, `test_correct_password_any_username`, `test_wrong_credentials_rejected` (8 cases), `test_healthz_is_open`, `test_hosted_mode_requires_strong_password`, `test_local_mode_needs_no_password`, `test_security_headers_always_present` |
 | US-13 target tool | `tests/test_targets.py`: default, all 7 targets, case and spacing, unknown target rejected before any model call, target with a note, every target offered on the page |
+| US-2 video (needs ffmpeg; skipped if absent) | `tests/test_video.py`: sent as one image, the sheet is a real wide JPEG with the expected frame count, the instruction says it is one video in time order, video defaults to a video-style prompt, an explicit target overrides it, images are unaffected, notes explain the sheet |
 | Page served | `test_index_served` |
 
 ## Checked by hand during development (one-off, not automated)
